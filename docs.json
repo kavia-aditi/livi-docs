@@ -16,7 +16,8 @@
           "index",
           "quickstart"
         ]
-      }
+      },
+      "architecture"
     ],
     "global": {
       "anchors": [

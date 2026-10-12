@@ -1,0 +1,151 @@
+---
+title: "LIVI v8.2.0: Targeted README Documentation Updates"
+sidebarTitle: "v8.2.0 Updates"
+description: "Apply source-backed README corrections for LIVI v8.2.0, covering MFi power, device rows, runtime libraries, display defaults, and installer behavior."
+---
+
+LIVI v8.2.0 changes configuration defaults, device presentation, and host setup. This page supplies replacement text for the affected sections of your supplied README and additions for previously undocumented behavior. Keep all other README wording unchanged.
+
+<Note>
+Scope: the supplied README and the supplied v8.1.0-to-v8.2.0 code diff. The original `docs/` article files and images have not been supplied, so this is a targeted README update set, not a completed migration or edit of those files. The tag endpoints and hardware behavior have not been independently verified. The newer-main Architecture page remains separate and unchanged.
+</Note>
+
+## Outdated Sections and Why
+
+| README Section | Required Change | Diff Evidence |
+| --- | --- | --- |
+| MFi Authentication | Change the application GPIO default from `21` to `-1`, explain external power, and distinguish installer seeding | `src/main/shared/types/DefaultConfig.ts`, `src/main/services/projection/driver/shared/config.py`, `driver/cp/iap2/mfi_auth_coprocessor.py`, `scripts/install/common.sh` |
+| Multi-Session | Replace the carrier text and numbered-session-badge description with device-row status behavior | `src/renderer/src/routes/settings/Devices.tsx` |
+| System Requirements (build) | Add the four Linux host libraries used by bundled media dependencies | `scripts/install/packages.txt` |
+| Raspberry Pi MFi package note | Qualify GPIO power as optional rather than universal | MFi power-on code skips GPIO when the configured pin is negative |
+| Desktop and Headless | Add the shared NetworkManager PMF setting and local-checkout asset preference | `scripts/install/common.sh`, `scripts/install/desktop/install.sh`, `scripts/install/headless/install.sh` |
+| View and Safe Area | Add EDID-derived defaults and even main-stream dimensions | `src/main/config/loadConfig.ts`, `src/main/services/video/panelEdid.ts`, `driver/cp/CpSession.ts`, `shared/utils/androidAuto.ts` |
+| Build Environment | Identify the release's pinned pnpm version rather than treating a live main badge as release evidence | `package.json`: pnpm `11.18.0` to `11.22.0` |
+
+Paths abbreviated after `driver/` and `shared/` in this table are under `src/main/services/projection/`.
+
+## Replacement README Text
+
+### MFi Authentication
+
+CarPlay requires the accessory to authenticate against the phone using an Apple **MFi authentication coprocessor**. This is a hardware chip, it cannot be emulated in software, and LIVI does not ship or bypass it. You need a physical coprocessor (e.g. salvaged from a certified CarPlay accessory or sourced as a module) wired to the I²C bus of your board.
+
+LIVI talks to the chip directly. Configuration (`config.json`):
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `carPlayMfiI2cBus` | `2` | I²C bus number the coprocessor is on |
+| `carPlayMfiPowerGpio` | `-1` | GPIO that powers the coprocessor; `-1` means no power pin and requires an externally powered chip |
+
+With `carPlayMfiPowerGpio` set to `-1`, LIVI skips GPIO power control and expects the chip to be powered externally. If your board powers the chip through a GPIO, set the pin to match your wiring.
+
+When MFi setup is enabled in the installer, it seeds bus `2` if missing and GPIO `21` when the saved power pin is missing, null, empty, or `-1`. Other saved pin values are preserved. The application default and installer-seeded configuration are therefore different.
+
+Back up and validate your configuration before rerunning MFi setup. An unreadable or invalid JSON configuration is replaced from an empty object, and an intentional external-power value of `-1` is replaced with the installer pin.
+
+Without a coprocessor, native CarPlay is unavailable. Dongle-based CarPlay and all Android Auto paths work regardless.
+
+### Multi-Session
+
+Replace only the paragraph beginning “Each device is shown” with:
+
+Each device is shown in a row with its transport icon, battery and signal indicators, and connection status. The active session is highlighted, available devices remain selectable, and offline devices are dimmed and cannot be selected. Carrier text and the numbered session badge are no longer displayed.
+
+Keep the surrounding connection limits, switching instructions, and pairing-removal text unchanged. The supplied diff does not justify changing those descriptions.
+
+### System Requirements (build)
+
+Add to the existing requirements list:
+
+- Linux host libraries for bundled decoder/FFmpeg dependencies: **libva2**, **libva-drm2**, **libva-x11-2**, and **libssh-4**.
+
+Add these packages to the existing Debian/Ubuntu/Raspberry Pi OS `apt-get install` command, retaining all other packages:
+
+```bash Additional Linux host libraries
+sudo apt-get install -y libva2 libva-drm2 libva-x11-2 libssh-4
+```
+
+Replace the sentence beginning “On a Raspberry Pi, the MFi coprocessor is powered” with:
+
+On a Raspberry Pi, if your MFi coprocessor is powered from a GPIO, GPIO control needs these additional packages:
+
+Keep the existing `python3-lgpio python3-rpi-lgpio` installation command and the following Raspberry Pi OS note unchanged. No Fedora package-name mapping is established by this diff, so do not substitute Debian package names into the Fedora command.
+
+## Additions to Existing README Sections
+
+### Desktop and Headless
+
+Add this shared installer note without replacing either installation flow:
+
+Both installers configure NetworkManager with optional Wi-Fi Protected Management Frames by writing `/etc/NetworkManager/conf.d/99-LIVI-wifi-pmf.conf`:
+
+```ini NetworkManager PMF configuration
+[connection]
+wifi-sec.pmf=2
+```
+
+This is a host-wide NetworkManager setting, not a LIVI-only access-point option. The installer attempts to reload NetworkManager configuration when `nmcli` is available; a successful reload is not guaranteed by the script.
+
+When run from a checkout containing the display assets, installation prefers those local display profiles and HDMI setup assets before falling back to packaged or repository sources.
+
+### View and Safe Area
+
+Add after the existing main and cluster examples:
+
+If both `projectionWidth` and `projectionHeight` are absent from the saved configuration, LIVI tries to use panel EDID dimensions as the defaults for projection and cluster resolution. Setting either projection dimension skips this default lookup; it does not reset explicitly saved settings.
+
+On Linux, lookup uses a connected output matching the connector in `drm.edid_firmware`, or the sole connected output. Missing, invalid, or ambiguous EDID data produces no detected geometry. The first lookup result, including failure, is cached for the process lifetime.
+
+Main-stream width and height passed by the CarPlay and Android Auto paths are rounded down to even values. The diff does not establish equivalent new rounding for every cluster-stream path.
+
+### Small Displays and Settings
+
+Add near the existing small-display description:
+
+For positive window content heights below 292 pixels, LIVI multiplies your configured UI zoom by `height / 292`. At 292 pixels or above, the configured zoom is unchanged by this height multiplier. The change is applied during window creation and settings saving; automatic handling of every resize is not established by the diff.
+
+Settings pages now scroll their headers together with grouped rows. Camera selection uses a list: selecting a valid device saves it and returns to the previous page. Calibration sliders snap values to the configured step precision.
+
+### Phone Time at CarPlay Connection
+
+Add as a short subsection under Native Apple CarPlay:
+
+LIVI handles a phone time update once per peer connection. If the supplied time differs from the host by more than 10 seconds, it attempts to set the UTC system clock and save it with `fake-hwclock`. Errors are logged. This requires suitable host permissions and tools; the change alone does not confirm that every installation can set its clock. Timezone and daylight-saving fields from this message are not applied by the shown handler.
+
+### Raspberry Pi HDMI-PR Displays
+
+Add under Installation for hosts using the HDMI-PR setup script:
+
+`scripts/install/pi/setup-hdmi-pr-display.sh` accepts `--kernel` to prepare a target kernel. Apt-managed Raspberry Pi kernels use matching package sources; the custom-kernel fallback is limited to the running kernel.
+
+Setup installs `/etc/kernel/postinst.d/livi-vc4` and `/usr/local/lib/livi/setup-hdmi-pr-display.sh` so the patch can be rebuilt after a kernel installation. A failed hook creates `/var/lib/livi/hdmi-pr/BUILD-FAILED-<kernel-version>` and warns that the display may remain dark. The hook still exits successfully, so a completed package installation does not prove the display patch succeeded.
+
+Do not reboot into that kernel until the failure is resolved. Retry the installed setup script against the affected version:
+
+```bash Retry a failed HDMI-PR build
+sudo /usr/local/lib/livi/setup-hdmi-pr-display.sh --kernel '<kernel-version>'
+```
+
+The script checks module vermagic before installation, preserves a module backup, and adds an initramfs hook for EDID firmware. Where `update-initramfs` is available, it attempts an initramfs update.
+
+Three Mercedes/Volvo EDID assets changed, but the supplied diff contains no binary timing details. Do not claim specific new display modes or dimensions from those binary changes.
+
+### Build Environment
+
+Add above Clone & Build:
+
+The supplied v8.2.0 package manifest pins **pnpm 11.22.0**. Use that release's manifest and lockfile when building v8.2.0. Badges and commands targeting `main` describe a moving branch, not a fixed release.
+
+Keep the existing build commands unchanged: the diff does not supply evidence that they were renamed. Do not replace this release's Python, node-gyp, or compositor requirements with requirements from the newer Rust-based main checkout.
+
+## What Remains Unchanged
+
+The supplied README's introduction, product status badges, connectivity scope, Linux-only native CarPlay description, wireless setup instructions, session limits, display calibration, telemetry commands, multi-display assignments, projection examples, installation URLs, macOS instructions, build target names, debugging reference, credits reference, disclaimer, and license are left alone except for the explicitly identified insertions or replacements above.
+
+No claim is made that dongle support was removed, native projection was first introduced in v8.2.0, or the binary media updates fix a particular playback issue. Source-level projection-message refactoring does not by itself justify rewriting the end-user README.
+
+## Remaining Documentation Scope
+
+Existing `docs/` articles cannot be checked or updated without their original contents. The supplied README references images under `docs/images/`, but those image binaries are not present in this message and have not been copied or replaced. In particular, the Devices screenshot may show the older tiles or session badges and needs a genuine v8.2.0 capture rather than an invented replacement.
+
+These replacements and additions are draft documentation in the editor. They have not been applied to the read-only source repository or published.

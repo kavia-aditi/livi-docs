@@ -17,7 +17,8 @@
           "quickstart"
         ]
       },
-      "architecture"
+      "architecture",
+      "release-8-2-0"
     ],
     "global": {
       "anchors": [

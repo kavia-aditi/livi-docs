@@ -1,0 +1,71 @@
+---
+title: "LIVI Release Notes and Version History"
+sidebarTitle: "Releases"
+description: "LIVI release history. The inspected source is version 9.3.0. Historical v8.1 to v8.2 changes are summarized from the supplied diff and preserved on the v8.2.0 page."
+---
+
+LIVI release information is documented from the inspected source tree and the historical notes available in this documentation set. There is no independently verified changelog or git tag history in the inspected repository, so recent release dates and tag completeness are unconfirmed.
+
+## Current version
+
+The inspected source tree reports version **9.3.0** in `package.json`, with package manager `pnpm@12.10.1`. This is the version this documentation describes.
+
+## Historical releases: v8.1 to v8.2
+
+A detailed diff-based summary of changes between v8.1 and v8.2 is preserved on the dedicated historical page:
+
+<Card title="v8.2.0 Updates" icon="tag" href="/release-8-2-0">
+  MFi default changes, device row behavior, EDID and HDMI hooks, display settings, audio and TLS, and dependency updates.
+</Card>
+
+The following is a high-level summary of the documented v8.2.0 changes. For full replacement text and provenance, see the linked page.
+
+### MFi authentication defaults
+
+The application default for `carPlayMfiPowerGpio` changed from `21` to `-1`, meaning no GPIO power pin is configured by default. When MFi setup is enabled in the installer, it seeds bus `2` and GPIO `21` only when the saved power pin is missing, null, empty, or `-1`. Other saved values are preserved. This creates a distinction between the runtime application default and the installer-seeded configuration. Back up your configuration before rerunning MFi setup.
+
+### Device row status
+
+Multi-session display changed from carrier text and numbered session badges to device rows showing transport icon, battery and signal indicators, and connection status. The active session is highlighted, available devices remain selectable, and offline devices are dimmed and cannot be selected.
+
+### Settings and display
+
+- Settings pages now scroll headers together with grouped rows.
+- Camera selection uses a list: selecting a valid device saves it and returns to the previous page.
+- Calibration sliders snap values to the configured step precision.
+- For positive window content heights below 292 pixels, the configured UI zoom is multiplied by `height / 292`.
+
+### EDID and HDMI defaults
+
+If both `projectionWidth` and `projectionHeight` are absent from the saved configuration, LIVI attempts to use panel EDID dimensions as defaults. Setting either projection dimension skips this lookup. On Linux, the lookup uses a connected output matching `drm.edid_firmware` or the sole connected output. Missing, invalid, or ambiguous EDID data produces no detected geometry. Main-stream width and height values passed by CarPlay and Android Auto are rounded down to even values.
+
+The Raspberry Pi HDMI-PR setup script accepts `--kernel` to prepare a target kernel and installs a postinst hook to rebuild the patch after kernel updates. A failed hook creates a warning file but exits successfully, so a completed package installation does not prove the display patch succeeded. The script includes module backup and initramfs hooks. Three Mercedes/Volvo EDID assets changed in the diff, but no binary timing details were available to document.
+
+### NetworkManager PMF configuration
+
+Both desktop and headless installers write a host-wide NetworkManager PMF configuration file (`/etc/NetworkManager/conf.d/99-LIVI-wifi-pmf.conf`) setting `wifi-sec.pmf=2`. The installer attempts to reload NetworkManager when `nmcli` is available, but a successful reload is not guaranteed.
+
+### Phone time at CarPlay connection
+
+LIVI handles a phone time update once per peer connection. If the supplied time differs from the host by more than 10 seconds, it attempts to set the UTC system clock and save it with `fake-hwclock`. This requires suitable host permissions and tools. Timezone and daylight-saving fields from this message are not applied.
+
+### Build dependencies
+
+The v8.2.0 diff adds four Linux host libraries for bundled decoder and FFmpeg dependencies:
+
+- `libva2`
+- `libva-drm2`
+- `libva-x11-2`
+- `libssh-4`
+
+The v8.2.0 package manifest pinned **pnpm 11.22.0**. Do not confuse a pinned release manifest with a live `main` branch badge.
+
+## Upgrade and backup guidance
+
+Before upgrading or rerunning installers, back up your `config.json` and any custom display assets. If configuration becomes unreadable or invalid, it may be replaced from an empty object and intentional values such as `-1` for external MFi power can be overwritten by installer defaults.
+
+There is no universal automatic downgrade path documented. If you need to revert after an upgrade, restore from your backup rather than expecting an automatic rollback.
+
+## Tag and release completeness
+
+The tag list and release history in the inspected repository have not been independently verified. The available documentation covers the current source (9.3.0) and the preserved v8.1-to-v8.2 historical diff page. For release artifacts, see the project's GitHub releases page.

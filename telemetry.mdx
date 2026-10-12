@@ -1,0 +1,116 @@
+---
+title: "Send telemetry to LIVI using Socket.IO or CLI"
+sidebarTitle: "Telemetry"
+description: "Use the local Socket.IO server or the CLI to send speed, GPS, fuel, and other vehicle data into LIVI. Includes events, payload fields, and merge behavior."
+---
+
+LIVI exposes a Socket.IO server on port 4000 that accepts partial telemetry updates from car bridges, GNSS receivers, or the developer CLI. The native Rust core merges each push into a live snapshot and broadcasts changes back to UI clients. This page documents the push API, the CLI commands, and the payload fields defined in the source.
+
+<Note>
+  The CLI source and the Rust server both use the `telemetry:push` event on port 4000, so they are compatible. The server implementation is in `native/livi-helperd/bin/livi-core/src/telemetry.rs`.
+</Note>
+
+## Server basics
+
+- **Endpoint:** `ws://<livi-host>:4000` (falls back to HTTP long-polling)
+- **Inbound event:** `telemetry:push`
+- **Broadcast event:** `telemetry:update`
+- **Authentication:** none (local only)
+
+When a client connects, the server immediately emits the current snapshot via `telemetry:update` if one exists.
+
+## Merging behavior
+
+Pushes are partial. The server merges them field by field into the live snapshot:
+
+- Top-level keys are replaced, except `gps` and `can`, which merge per field.
+- If you send `{ "gps": { "lat": 52.5 } }`, the previous `lng` is preserved.
+- If `ts` is omitted, the server adds a Unix millisecond timestamp at ingest time.
+
+## Developer CLI
+
+The telemetry simulator lives in `scripts/tools/telemetry-sim.ts`. Install its dependencies first:
+
+```bash
+pnpm --dir scripts/tools install
+```
+
+Send a single field or a block of fields:
+
+```bash
+pnpm --dir scripts/tools telemetry:set speedKph=73
+pnpm --dir scripts/tools telemetry:set fuelPct=4 rangeKm=38
+pnpm --dir scripts/tools telemetry:set gps.lat=53.5912 gps.lng=10.015
+```
+
+Repeat the same push on a timer (useful for live streaming):
+
+```bash
+pnpm --dir scripts/tools telemetry:set _repeatMs=1000 speedKph=90 rpm=2500
+```
+
+Send a realistic all-fields demo:
+
+```bash
+pnpm --dir scripts/tools telemetry:demo
+```
+
+### Environment variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `TELEMETRY_URL` | `http://127.0.0.1:4000` | Socket.IO server URL |
+| `TELEMETRY_SOURCE` | `sim` | Source tag included in every push |
+
+## Raw Socket.IO example
+
+You can push data from any Socket.IO client:
+
+```js
+import { io } from 'socket.io-client'
+
+const socket = io('ws://127.0.0.1:4000', { transports: ['websocket'] })
+
+socket.emit('telemetry:push', {
+  speedKph: 50,
+  rpm: 1500,
+  gear: 4,
+  lights: true,
+  nightMode: true,
+  gps: {
+    lat: 53.5577,
+    lng: 9.9979,
+    heading: 90
+  }
+})
+```
+
+## Common payload fields
+
+The full type definition is in `src/main/shared/types/Telemetry.ts`. These are the most frequently used fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `speedKph` | `number` | Vehicle speed in km/h |
+| `rpm` | `number` | Engine RPM |
+| `gear` | `number` or `string` | Gear position (e.g. `4`, `D`, `R`) |
+| `lights` | `boolean` | Low beam state |
+| `highBeam` | `boolean` | High beam state |
+| `turn` | `'none'`, `'left'` or `'right'` | Blinker state |
+| `fuelPct` | `number` | Fuel or battery level (0 to 100) |
+| `rangeKm` | `number` | Estimated range in km |
+| `nightMode` | `boolean` | Override UI day or night mode |
+| `path` | `string` | Navigate the UI router (e.g. `/media`) |
+| `volume` | `number` | Head-unit volume (0.0 to 1.0) |
+| `carType` | `string` | Vehicle type name (e.g. `HybridGasoline`) |
+| `evConnectorTypes` | `string[]` | Connector names (e.g. `Combo2`) |
+| `ambientC` | `number` | Ambient temperature in C |
+| `batteryV` | `number` | 12V battery voltage |
+| `gps.lat` | `number` | GPS latitude (decimal degrees) |
+| `gps.lng` | `number` | GPS longitude (decimal degrees) |
+| `gps.heading` | `number` | Heading in degrees |
+| `gps.speedMs` | `number` | GPS speed in m/s |
+
+<Warning>
+  Routing to CarPlay, Android Auto, and the dashboard varies by field. Check the routing table in `src/main/shared/types/Telemetry.ts` before adding new fields.
+</Warning>

@@ -1,0 +1,59 @@
+---
+title: "Troubleshoot LIVI Video, Connections, and Startup Issues"
+sidebarTitle: "Troubleshooting"
+description: "Diagnose LIVI startup, phone connectivity, and video issues using verified runtime flags, configuration paths, and source-aware logging guidance."
+---
+
+LIVI uses a native Rust core for phone sessions and a GStreamer process for video. Isolate connection, decoder, and display problems separately before changing several settings at once. This guide describes inspected package version **9.3.0**; no hardware tests were performed.
+
+## Video Is Black
+
+Run the installed AppImage from a terminal so you can inspect its output. From the folder containing the downloaded AppImage, compare normal operation with software decoding:
+
+```bash Decoder Isolation
+LIVI_GST_SWDEC=1 ./LIVI*.AppImage
+```
+
+`LIVI_GST_SWDEC` is checked in the current video player source. If software decoding changes the result, investigate the hardware decoder and host GPU drivers. It does not prove that every other part of the stream is correct. Ensure only one AppImage matches the filename pattern.
+
+See [Hardware Notes](/using-livi/hardware) for OpenGL ES and VAAPI requirements.
+
+## Display or Input Problems
+
+The current Linux compositor uses Smithay. Its legacy-named logging flag remains supported:
+
+```bash Compositor Diagnostics
+LIVI_WLR_DEBUG=1 ./LIVI*.AppImage
+```
+
+Record your screen resolution, GPU, desktop or headless install mode, and whether the issue affects the whole interface or only projected video.
+
+## Phone Does Not Connect
+
+- For CarPlay, verify the physical MFi coprocessor or LIVI Link requirement. Software cannot bypass it.
+- For wireless sessions, check Bluetooth pairing and the Wi-Fi interface selected in General connection settings. Bluetooth pairing does not mean the Wi-Fi projection session has started.
+- For wired Android Auto, remember that only one wired session is supported at a time.
+- Read [Configuration](/using-livi/configuration) before editing connection settings or MFi GPIO values.
+
+## Find Logs and Configuration
+
+The current core starts file logging in a `log` directory beside its configuration file:
+
+| Platform | Default Log Directory |
+| --- | --- |
+| Linux | `~/.config/LIVI/log` (or under `$XDG_CONFIG_HOME/LIVI`) |
+| macOS | `~/Library/Application Support/LIVI/log` |
+
+Capture terminal output as well. `DEBUGGING.md` describes older AppImage-adjacent logs and additional environment flags; those descriptions are not a guarantee of current log filenames or behavior. Do not rely on the older claim that Electron owns USB sessions.
+
+## Headless Boot Surprise
+
+The headless installer switches the default boot target. The README documents returning to graphical startup with:
+
+```bash Restore Graphical Boot
+sudo systemctl set-default graphical.target
+```
+
+This changes the next default startup target; it is not a complete uninstall of the kiosk service or installer changes.
+
+When reporting a problem, include the package version, platform, install mode, reproduction steps, and relevant logs. Remove personal identifiers and sensitive pairing or network information first.

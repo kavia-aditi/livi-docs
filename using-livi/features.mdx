@@ -1,0 +1,187 @@
+---
+title: "LIVI Features and Platform Support"
+description: "Explore LIVI's platform support for wired and wireless CarPlay and Android Auto, multi-session phone handling, multi-display windows, display calibration, GPS, telemetry dashboard, and audio pipelines."
+sidebarTitle: "Features"
+---
+
+LIVI is a cross-platform open-source head unit that implements Apple CarPlay and Android Auto natively. This page covers what LIVI can do, which platforms and transports each feature runs on, and the practical limits you will encounter.
+
+## Connectivity
+
+LIVI connects to phones over USB cable and over its own Wi-Fi access point with Bluetooth pairing. The supported combinations depend on the host platform.
+
+### Platform support matrix
+
+| Feature | Linux | macOS |
+| --- | --- | --- |
+| Wired CarPlay | Yes | Yes |
+| Wireless CarPlay | Yes | Yes (LIVI Link only) |
+| Wired Android Auto | Yes | Yes |
+| Wireless Android Auto | Yes | No |
+
+Wireless CarPlay and wireless Android Auto are enabled independently in Settings. A head unit can offer one, both, or neither.
+
+### Wired connections
+
+Wired CarPlay runs directly over USB (no OTG required). Wired Android Auto runs over USB on every platform.
+
+### Wireless connections
+
+Wireless sessions do not need a router. LIVI brings up its own Wi-Fi access point and the phone joins that network. Bluetooth carries the pairing and handover; the session itself then runs over Wi-Fi.
+
+Wireless operation requires:
+
+- A Wi-Fi interface for the access point
+- A Bluetooth adapter for pairing
+
+Both interfaces are selected under **Settings > General > Connections**. The **LIVI Link** dongle can provide its own radios.
+
+With **Auto Connect** enabled, a phone that has paired before is picked up again automatically. The **Car Name** is what the phone shows when it lists nearby vehicles.
+
+### The LIVI Link dongle
+
+A LIVI Link is a network-connected accessory that provides MFi authentication and/or wireless radios. On macOS, it is the only route to authenticate CarPlay because Macs have no I2C bus for a physical MFi coprocessor.
+
+## Multi-Session
+
+Several phones can be connected at the same time. All connected devices keep their state, battery and signal readings, media metadata, and turn-by-turn navigation data up to date in the background, not just the one on screen.
+
+Switching between phones is a handover, not a reconnect. The drivers stay armed and the video and audio paths stay open, so bringing another phone forward takes milliseconds instead of multiple seconds.
+
+### Session limits
+
+| Transport | Device limit |
+| --- | --- |
+| Wireless CarPlay | Multiple |
+| Wired CarPlay | Multiple |
+| Wireless Android Auto | Multiple |
+| Wired Android Auto | One |
+
+Mixed sets of CarPlay and Android Auto phones over cable and Wi-Fi are a normal use case.
+
+Each connected device is shown with its transport, battery level, and carrier or signal strength. Switch from the device list, or bind the **Cycle Session** key under **Settings > General > Key Bindings** to step through phones with a physical button. Removing a device ends its session and forgets the pairing.
+
+## Video Pipeline
+
+LIVI uses a native, zero-copy GStreamer video pipeline with hardware-accelerated decoding on Linux (including Raspberry Pi 4/5) and macOS. Supported codecs:
+
+- H.264
+- H.265
+
+The pipeline is built for low latency and handles both the main video stream and the instrument cluster stream simultaneously. On Linux the video is rendered through a nested compositor via `waylandsink`.
+
+## Audio
+
+LIVI provides separate volume controls for:
+
+- Head Unit
+- Music playback
+- Navigation prompts
+- Voice Assistant
+- Phone calls
+- System sounds
+
+Audio output and input devices can be selected independently, with a system-default fallback. Sampling frequency can be set to 44.1 kHz or 48 kHz.
+
+## Multi-Display Windows
+
+LIVI can run as multiple windows at once, each placeable on its own physical display:
+
+- **Main Screen** : the primary LIVI interface and phone projection
+- **Dash Screen** : instrument cluster or dashboard view
+- **Aux Screen** : auxiliary content panel
+
+Configure each window under **Settings > General > Window Settings**. Enable or disable the Dash and Aux screens independently, set their width and height, or toggle fullscreen (`kiosk`) mode for any screen.
+
+### Feature assignment to screens
+
+Under **Settings > General > Tab Settings**, choose which features appear on which screens:
+
+| Feature | Can show on |
+| --- | --- |
+| Dashboards (dash 1–4) | Main, Dash, Aux |
+| Media player | Main, Dash, Aux |
+| Reverse camera | Main, Dash, Aux |
+| Custom tab (URL) | Main, Dash, Aux |
+
+Any feature can be shown on one, several, or all windows at the same time.
+
+## View Area and Safe Area
+
+Stream resolution, view area insets, and safe area can be configured independently for the main and cluster streams. This applies to both Android Auto and CarPlay.
+
+- **View Area** : the rendered stream region. Top, bottom, left, and right insets crop the visible area.
+- **Safe Area** : the region where the phone keeps navigation hints and UI elements inside the view area.
+- **Draw Outside** : when enabled, the phone may draw content outside the safe area (main stream only).
+
+These are configured under **Settings > Video > Main Video** and **Settings > Video > Cluster Video**.
+
+## Display Calibration
+
+Car displays are rarely color accurate. LIVI applies software correction as a single pass over the finished frame, covering everything on screen: the LIVI interface, the dashboards, and the projected phone video alike.
+
+The pass only runs while a value differs from its default, so a display that needs no correction costs nothing.
+
+Configure under **Settings > Appearance > Contrast / Gamma** and **Settings > Appearance > Color**:
+
+| Parameter | Default | Range |
+| --- | --- | --- |
+| Gamma | 1.0 | Software dependent |
+| Contrast | 1.0 | Software dependent |
+| Red channel | 1.0 | Software dependent |
+| Green channel | 1.0 | Software dependent |
+| Blue channel | 1.0 | Software dependent |
+
+## GPS
+
+LIVI reads a GNSS receiver on a serial port. Any receiver speaking **NMEA-0183** works. On **u-blox** modules LIVI additionally polls UBX for the module identity and RF front-end status. Development and testing were done with a **NEO-M9N** receiver.
+
+Configure under **Settings > General > GPS**:
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| Enable | `false` | Read the receiver |
+| Device | `/dev/ttyAMA0` | Serial device path |
+| Baud Rate | `38400` | Use `9600` for older modules |
+
+The receiver also serves as a time source. Its satellite clock sets the system time ahead of what a phone offers at CarPlay session start, and the fix position selects the system timezone so daylight saving follows the tz database.
+
+On a Raspberry Pi 5, `/dev/ttyAMA0` on GPIO 14/15 does not exist until `dtoverlay=uart0` is set in `config.txt`.
+
+## Telemetry Dashboard
+
+The Dashboard is a work in progress. While the underlying telemetry payload supports many signals, the UI currently exposes a subset. Widgets and layouts will be extended over time.
+
+Telemetry data can be pushed into a running LIVI instance via the CLI in `scripts/tools`:
+
+```bash
+pnpm -C scripts/tools install
+pnpm -C scripts/tools run telemetry:demo
+pnpm -C scripts/tools run telemetry:set fuelPct=4 rangeKm=38
+pnpm -C scripts/tools run telemetry:set gps.lat=53.5912 gps.lng=10.015
+pnpm -C scripts/tools run telemetry:set _repeatMs=1000 speedKph=90 rpm=2500
+```
+
+The full field list and routing lives in `src/main/shared/types/Telemetry.ts`.
+
+## MFi Authentication
+
+CarPlay requires the accessory to authenticate against the phone. LIVI does not ship or bypass an Apple MFi authentication coprocessor. Two routes are supported:
+
+- **On the board** : a coprocessor wired to the I2C bus (Linux only)
+- **Over the network** : a [LIVI Link](/using-livi/hardware) dongle
+
+Configure the on-board route under **Settings > General > MFi**:
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| I2C Bus | `2` | Bus number the coprocessor is on |
+| Power Pin | `-1` | GPIO that powers the coprocessor; `-1` means no power pin |
+
+Without one of these routes, native CarPlay is unavailable. All Android Auto paths work regardless.
+
+## Appearance and Brightness
+
+LIVI supports dark mode, auto-brightness, and a phone appearance mode that can follow the phone or be forced to day or night. Overlay messages can be toggled on or off. The UI zoom level can be set from 50% to 200% in 10% steps.
+
+Custom UI colors are configurable separately for dark and light themes, and a custom UI icon can be uploaded.

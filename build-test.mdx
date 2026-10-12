@@ -1,0 +1,128 @@
+---
+title: "Build and test LIVI from source on Linux and macOS"
+sidebarTitle: "Build and Test"
+description: "Set up your development environment, compile the Rust native core and Electron frontend, run linting and tests, and package LIVI for Linux or macOS."
+---
+
+This guide lists the exact commands used in CI to build, lint, type-check, and test LIVI. They are taken from `package.json`, `scripts/build-native.mjs`, and the `typecheck.yml` workflow. Platform-specific requirements are noted where the README and build scripts differ.
+
+<Steps>
+  <Step title="Prerequisites">
+    - **Node.js 24.x** with `corepack` enabled (installs pnpm 12.x automatically)
+    - **Rust** via rustup (CI runs `rustup toolchain install` with no explicit toolchain file)
+    - **Linux build deps:** `build-essential`, `pkg-config`, `libgstreamer1.0-dev`, `libgstreamer-plugins-base1.0-dev`, `cmake`, `libwayland-dev`, `libxkbcommon-dev`
+    - **macOS:** Node.js, pnpm, and Rust. The README says these are enough, but `scripts/build-native.mjs` also requires the GStreamer framework headers at `/Library/Frameworks/GStreamer.framework` for the native video host. This requirement is unconfirmed for general local builds.
+
+    Optional: a VA-API driver for Linux hardware video decode (`i965-va-driver`, `intel-media-va-driver`, or `mesa-va-drivers`).
+  </Step>
+  <Step title="Install dependencies">
+    ```bash
+    pnpm install --frozen-lockfile
+    ```
+
+    In CI the typecheck workflow passes `--ignore-scripts` to skip postinstall hooks.
+  </Step>
+  <Step title="Lint and format">
+    Read-only lint check (does not write files):
+
+    ```bash
+    pnpm run lint:check
+    ```
+
+    Auto-fix and format (mutates files):
+
+    ```bash
+    pnpm run lint
+    pnpm run format
+    ```
+
+    Rust formatting check:
+
+    ```bash
+    cd native && cargo fmt --all --check
+    ```
+  </Step>
+  <Step title="Type-check">
+    ```bash
+    pnpm run typecheck
+    ```
+
+    This runs both `typecheck:node` and `typecheck:web` in sequence.
+  </Step>
+  <Step title="Test">
+    TypeScript (main process):
+
+    ```bash
+    pnpm run test:main
+    ```
+
+    TypeScript (renderer):
+
+    ```bash
+    pnpm run test:renderer
+    ```
+
+    Both at once:
+
+    ```bash
+    pnpm run test
+    ```
+
+    Coverage reports:
+
+    ```bash
+    pnpm run coverage:main
+    pnpm run coverage:renderer
+    ```
+
+    Rust workspace:
+
+    ```bash
+    cd native
+    cargo test --workspace --locked
+    cargo clippy --workspace --all-targets --locked -- -D warnings
+    ```
+
+    ARM link daemon cross-check (CI only):
+
+    ```bash
+    cargo clippy -p livid --target armv7-unknown-linux-musleabihf --locked -- -D warnings
+    ```
+  </Step>
+  <Step title="Build native binaries">
+    ```bash
+    node scripts/build-native.mjs [--arch=arm64|x64]
+    ```
+
+    The script compiles Rust packages for the current platform, copies release artifacts into `native/*/build/Release`, and handles macOS cross-compilation automatically. In CI it adds `--locked` when the `CI` environment variable is set.
+  </Step>
+  <Step title="Build and package the app">
+    Vite production build:
+
+    ```bash
+    pnpm run build:app
+    ```
+
+    Platform packages:
+
+    ```bash
+    # Linux
+    pnpm run build:linux:x64
+    pnpm run build:linux:arm64
+    
+    # macOS
+    pnpm run build:mac:arm64
+    pnpm run build:mac:x64
+    ```
+
+    Each target runs typecheck, builds the native binaries for the requested architecture, bundles the frontend, and calls `electron-builder`.
+  </Step>
+</Steps>
+
+<Note>
+  The CI build workflow triggers only after `typecheck` succeeds on the `main` branch. Set `HUSKY=0` if you want to suppress git hooks during automated runs.
+</Note>
+
+<Warning>
+  No hardware tests were run to produce this guide. Commands reflect the inspected `main` checkout and may differ on release tags.
+</Warning>

@@ -1,0 +1,312 @@
+---
+title: "Configure LIVI Settings and Config File"
+description: "Learn how to configure LIVI through the in-app settings UI and by editing config.json directly. Understand config file paths on Linux and macOS, apply/reconnect behavior, and a reference table of real setting names from the source."
+sidebarTitle: "Configuration"
+---
+
+LIVI stores all persistent settings in a single JSON config file. You can change most values through the in-app Settings pages, and some values are applied immediately while others require a reconnect or restart. This page explains where the file lives, how to edit it, and what each setting controls.
+
+## Config file location
+
+LIVI looks for `config.json` in the platform-specific user data directory. The path is determined in `native/livi-helperd/bin/livi-core/src/paths.rs`.
+
+### Linux
+
+```text
+$XDG_CONFIG_HOME/LIVI/config.json
+```
+
+If `XDG_CONFIG_HOME` is not set or empty, it falls back to:
+
+```text
+~/.config/LIVI/config.json
+```
+
+The config backup mirror is written to:
+
+```text
+$XDG_DATA_HOME/LIVI/config.json
+```
+
+If `XDG_DATA_HOME` is not set or empty, it falls back to:
+
+```text
+~/.local/share/LIVI/config.json
+```
+
+### macOS
+
+```text
+~/Library/Application Support/LIVI/config.json
+```
+
+The backup mirror is written to:
+
+```text
+~/Library/Application Support/LIVI/backup/config.json
+```
+
+### File format
+
+The config file is standard JSON. LIVI validates the file on load and silently corrects or falls back to defaults for fields with the wrong type. Unknown keys are preserved but not used. Empty icon fields (`carplayIcon120`, `carplayIcon180`, `carplayIcon256`) are omitted from the file when blank.
+
+## Apply, reconnect, and restart behavior
+
+Not every setting takes effect the moment you change it. LIVI distinguishes three behaviors:
+
+- **Apply immediately** : the change is sent to the running core and takes effect at once
+- **Reconnect only** : the change requires disconnecting and reconnecting the phone session
+- **Restart required** : the change needs a full application restart
+
+The `src/renderer/src/components/pages/settings/constants.ts` source defines which settings require a restart:
+
+```typescript
+export const requiresRestartParams: (keyof Config)[] = [
+  'wirelessAaEnabled',
+  'wirelessCpEnabled',
+  'displayMode',
+  'projectionWidth',
+  'projectionHeight',
+  'projectionFps',
+  'projectionDpi',
+  'projectionViewAreaTop',
+  'projectionViewAreaBottom',
+  'projectionViewAreaLeft',
+  'projectionViewAreaRight',
+  'projectionSafeAreaTop',
+  'projectionSafeAreaBottom',
+  'projectionSafeAreaLeft',
+  'projectionSafeAreaRight',
+  'projectionSafeAreaDrawOutside',
+  'clusterWidth',
+  'clusterHeight',
+  'clusterFps',
+  'clusterDpi',
+  'clusterViewAreaTop',
+  'clusterViewAreaBottom',
+  'clusterViewAreaLeft',
+  'clusterViewAreaRight',
+  'clusterSafeAreaTop',
+  'clusterSafeAreaBottom',
+  'clusterSafeAreaLeft',
+  'clusterSafeAreaRight',
+  'wifiType',
+  'wifiChannel',
+  'wifiChannelWidth',
+  'country',
+  'wifiInterface',
+  'btAdapter',
+  'wifiDedicatedInterface',
+  'disableAudioOutput',
+  'autoConn',
+  'carName',
+  'oemName',
+  'wifiPassword',
+  'samplingFrequency',
+  'hand',
+  'carType',
+  'carplayIcon120',
+  'carplayIcon180',
+  'carplayIcon256'
+]
+```
+
+Settings not in this list are either applied immediately or sent to the phone on the next session start.
+
+## Settings reference
+
+The tables below list the real JSON key names as they appear in `config.json`, grouped by the in-app settings category.
+
+### General > Connections
+
+| JSON key | Type | Default | UI label |
+| --- | --- | --- | --- |
+| `carName` | string | `"LIVI"` | Car Name |
+| `oemName` | string | `"App"` | UI Name |
+| `wifiType` | string | `"5ghz"` | Wi-Fi Frequency |
+| `wifiPassword` | string | `"12345678"` | Wi-Fi Password |
+| `wifiChannel` | number | `36` | Wi-Fi Channel |
+| `wifiChannelWidth` | number | `40` | Wi-Fi Channel Width |
+| `country` | string | `"DE"` | Wi-Fi Country |
+| `wifiInterface` | string | `"wlan0"` | Wi-Fi Interface |
+| `wifiDedicatedInterface` | boolean | `false` | Dedicated Interface |
+| `btAdapter` | string | `"hci0"` | Bluetooth Interface |
+| `wirelessAaEnabled` | boolean | `false` | Wireless Android Auto |
+| `wirelessCpEnabled` | boolean | `false` | Wireless CarPlay |
+| `autoConn` | boolean | `true` | Auto Connect |
+
+### General > Window Settings
+
+| JSON key | Type | Default | UI label |
+| --- | --- | --- | --- |
+| `displayMode` | string | `""` | Display Mode |
+| `mainScreenWidth` | number | `1280` | Main Width |
+| `mainScreenHeight` | number | `720` | Main Height |
+| `kiosk.main` | boolean | `false` | Main Fullscreen |
+| `dashScreenActive` | boolean | `false` | Dash Active |
+| `dashScreenWidth` | number | `1280` | Dash Width |
+| `dashScreenHeight` | number | `720` | Dash Height |
+| `kiosk.dash` | boolean | `false` | Dash Fullscreen |
+| `auxScreenActive` | boolean | `false` | Aux Active |
+| `auxScreenWidth` | number | `800` | Aux Width |
+| `auxScreenHeight` | number | `480` | Aux Height |
+| `kiosk.aux` | boolean | `false` | Aux Fullscreen |
+
+### General > Tab Settings
+
+| JSON key | Type | Default | UI label |
+| --- | --- | --- | --- |
+| `dashboards.dash1.main` | boolean | `true` | Dash 1 on Main |
+| `dashboards.dash1.dash` | boolean | `false` | Dash 1 on Dash |
+| `dashboards.dash1.aux` | boolean | `false` | Dash 1 on Aux |
+| `media.main` | boolean | `true` | Media on Main |
+| `media.dash` | boolean | `false` | Media on Dash |
+| `media.aux` | boolean | `false` | Media on Aux |
+| `camera.main` | boolean | `true` | Camera on Main |
+| `camera.dash` | boolean | `false` | Camera on Dash |
+| `camera.aux` | boolean | `false` | Camera on Aux |
+| `autoSwitchOnReverse` | boolean | `true` | Automatic on reverse gear |
+| `cameraMirror` | boolean | `false` | Mirror |
+| `cameraRotation` | number | `0` | Rotation |
+| `cameraId` | string | `""` | Camera |
+| `custom.main` | boolean | `false` | Custom on Main |
+| `custom.dash` | boolean | `false` | Custom on Dash |
+| `custom.aux` | boolean | `false` | Custom on Aux |
+| `customUrl` | string | `""` | Address |
+
+### Appearance
+
+| JSON key | Type | Default | UI label |
+| --- | --- | --- | --- |
+| `displayBrightness` | number | `1.0` | Display Brightness |
+| `displayBrightnessAuto` | boolean | `true` | Auto Brightness |
+| `darkMode` | boolean | `true` | Dark Mode |
+| `overlayMessages` | boolean | `true` | Overlay Messages |
+| `appearanceMode` | string | `"auto"` | Phone Appearance |
+| `primaryColorDark` | string | `""` | Primary Color Dark |
+| `highlightColorDark` | string | `""` | Highlight Color Dark |
+| `backgroundColorDark` | string | `""` | Background Color Dark |
+| `primaryColorLight` | string | `""` | Primary Color Light |
+| `highlightColorLight` | string | `""` | Highlight Color Light |
+| `backgroundColorLight` | string | `""` | Background Color Light |
+| `displayGamma` | number | `1.0` | Gamma |
+| `displayContrast` | number | `1.0` | Contrast |
+| `displayColorR` | number | `1.0` | Red channel |
+| `displayColorG` | number | `1.0` | Green channel |
+| `displayColorB` | number | `1.0` | Blue channel |
+| `carplayIcon180` | string | `""` | UI Icon |
+
+### Audio
+
+| JSON key | Type | Default | UI label |
+| --- | --- | --- | --- |
+| `huVolume` | number | `0.95` | Head Unit |
+| `audioVolume` | number | `0.95` | Music |
+| `navVolume` | number | `0.95` | Navigation |
+| `voiceAssistantVolume` | number | `0.95` | Voice Assistant |
+| `callVolume` | number | `0.95` | Phone Calls |
+| `systemSoundsVolume` | number | `0.75` | System Sounds |
+| `audioOutputDevice` | string | `""` | Audio Output |
+| `audioInputDevice` | string | `""` | Audio Input |
+| `samplingFrequency` | number | `1` | Sampling Frequency (0 = 44.1 kHz, 1 = 48 kHz) |
+| `huVolumeLinkSystem` | boolean | `true` | Link Head Unit to System Volume |
+| `disableAudioOutput` | boolean | `false` | Disable Audio |
+
+### Video
+
+| JSON key | Type | Default | UI label |
+| --- | --- | --- | --- |
+| `projectionWidth` | number | `1280` | Main Width |
+| `projectionHeight` | number | `720` | Main Height |
+| `projectionFps` | number | `60` | Main FPS |
+| `projectionDpi` | number | `0` | Main DPI |
+| `projectionViewAreaTop` | number | `0` | Main View Area Top |
+| `projectionViewAreaBottom` | number | `0` | Main View Area Bottom |
+| `projectionViewAreaLeft` | number | `0` | Main View Area Left |
+| `projectionViewAreaRight` | number | `0` | Main View Area Right |
+| `projectionSafeAreaTop` | number | `0` | Main Safe Area Top |
+| `projectionSafeAreaBottom` | number | `0` | Main Safe Area Bottom |
+| `projectionSafeAreaLeft` | number | `0` | Main Safe Area Left |
+| `projectionSafeAreaRight` | number | `0` | Main Safe Area Right |
+| `projectionSafeAreaDrawOutside` | boolean | `true` | Main Draw Outside |
+| `clusterWidth` | number | `1280` | Cluster Width |
+| `clusterHeight` | number | `720` | Cluster Height |
+| `clusterFps` | number | `60` | Cluster FPS |
+| `clusterDpi` | number | `0` | Cluster DPI |
+| `clusterViewAreaTop` | number | `0` | Cluster View Area Top |
+| `clusterViewAreaBottom` | number | `0` | Cluster View Area Bottom |
+| `clusterViewAreaLeft` | number | `0` | Cluster View Area Left |
+| `clusterViewAreaRight` | number | `0` | Cluster View Area Right |
+| `clusterSafeAreaTop` | number | `60` | Cluster Safe Area Top |
+| `clusterSafeAreaBottom` | number | `10` | Cluster Safe Area Bottom |
+| `clusterSafeAreaLeft` | number | `300` | Cluster Safe Area Left |
+| `clusterSafeAreaRight` | number | `300` | Cluster Safe Area Right |
+
+### Car
+
+| JSON key | Type | Default | UI label |
+| --- | --- | --- | --- |
+| `carType` | number | `1` (Gasoline) | Fuel Type |
+| `hand` | number | `0` (LHD) | Steering wheel position |
+| `maxSpeedKph` | number | `200` | Max Speed |
+| `speedScaleStep` | number | `40` | Scale Step |
+| `maxRpm` | number | `5000` | Max RPM |
+| `redlineRpm` | number | `4500` | Redline |
+| `speedUnit` | string | `"kmh"` | Speed Unit |
+| `temperatureUnit` | string | `"celsius"` | Temperature Unit |
+
+### General > Key Bindings
+
+The `bindings` object maps action names to keyboard event codes. All bindings are stored under the `bindings` key. Default values are listed in the source at `src/main/shared/types/Config.ts` as `DEFAULT_BINDINGS`.
+
+### General > MFi
+
+| JSON key | Type | Default | UI label |
+| --- | --- | --- | --- |
+| `carPlayMfiI2cBus` | number | `2` | I2C Bus |
+| `carPlayMfiPowerGpio` | number | `-1` | Power Pin |
+
+### General > GPS
+
+| JSON key | Type | Default | UI label |
+| --- | --- | --- | --- |
+| `gpsEnabled` | boolean | `false` | Enable |
+| `gpsDevice` | string | `"/dev/ttyAMA0"` | Device |
+| `gpsBaudRate` | number | `38400` | Baud Rate |
+
+### General > Other
+
+| JSON key | Type | Default | UI label |
+| --- | --- | --- | --- |
+| `startPage` | string | `"/"` | Start Page |
+| `visualAudioDelayMs` | number | `0` | FFT Delay |
+| `uiZoomPercent` | number | `100` | UI Zoom |
+| `language` | string | `"en"` | Language |
+
+### System
+
+| JSON key | Type | Default | UI label |
+| --- | --- | --- | --- |
+| `debugLogging` | boolean | `false` | Debug |
+| `updateNightly` | boolean | `false` | (Nightly updates toggle; UI is custom) |
+| `dismissedPackages` | string[] | `[]` | Dismissed update packages |
+
+## Editing the config file
+
+You can edit `config.json` while LIVI is not running. On the next start, LIVI loads the file, validates every field against its type, and silently replaces malformed values with defaults. If the file is corrupted, LIVI restores from the backup mirror.
+
+To edit while LIVI is running, change the value through the Settings UI. The UI sends a patch to the core, which validates it, writes the file atomically, and updates both the primary and backup copies.
+
+## Validation rules
+
+The core applies a few hard rules when saving:
+
+- `wifiPassword` must be 8 to 63 characters, inclusive. A shorter or longer value falls back to the default `"12345678"`.
+- Unknown keys are accepted but ignored by the core.
+- Type mismatches fall back to defaults per field.
+- Icon fields are omitted from the file when empty.
+- `lastKnownGps` is kept when present.
+
+## Window bounds
+
+Screen position and size are stored in `mainScreenBounds`, `dashScreenBounds`, and `auxScreenBounds` as `{ x, y, width, height }`. These are set automatically when you move or resize a window and are not exposed in the settings UI.

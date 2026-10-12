@@ -1,0 +1,157 @@
+---
+title: "Hardware Notes for Linux, Raspberry Pi, and macOS"
+sidebarTitle: "Hardware Notes"
+description: "Platform-specific hardware requirements for LIVI: OpenGL ES 3.x, VAAPI on x86_64 Linux, Raspberry Pi Trixie and GPIO caveats, MFi GPIO defaults, and macOS Gatekeeper."
+---
+
+LIVI runs on Linux (arm64 and x86_64) and macOS (arm64). Each platform has specific GPU, kernel, and peripheral requirements. This page collects the constraints and verification steps so you can confirm your hardware before installing.
+
+## Required GPU support
+
+LIVI requires **OpenGL ES 3.x**.
+
+- **Raspberry Pi 4, CM4, Pi 5, and CM5** are supported. They must run Raspberry Pi OS based on **Trixie (Debian 13)** for OpenGL ES 3.x support.
+- **Raspberry Pi 3 and earlier** use the VideoCore IV GPU, which supports only OpenGL ES 2.0. These boards are **not supported**.
+- **Linux x86_64 desktops** with Intel, AMD, or NVIDIA GPUs that expose OpenGL ES 3.x through Mesa work out of the box.
+- **macOS arm64** (Apple Silicon) meets this requirement natively.
+
+## Linux x86_64 (desktop)
+
+### Optional hardware-accelerated video decode
+
+LIVI can decode H.264 and H.265 in software, but hardware decoding reduces CPU load and latency. On x86_64 Linux, LIVI uses the system **VA-API** driver. The driver is not bundled with LIVI because it must match your GPU and kernel.
+
+Install the driver for your GPU, then verify it with `vainfo`:
+
+```bash
+# Older Intel (Broadwell and earlier)
+sudo apt-get install i965-va-driver
+
+# Gen9+ Intel
+sudo apt-get install intel-media-va-driver
+
+# AMD
+sudo apt-get install mesa-va-drivers
+
+# Verify
+vainfo
+```
+
+If `vainfo` reports no supported profiles, LIVI still works via the bundled software decoder. Use `LIVI_GST_SWDEC=1` to force software decoding for comparison:
+
+```bash
+LIVI_GST_SWDEC=1 ~/LIVI/LIVI.AppImage
+```
+
+> [!NOTE]
+> Hardware decode is optional. LIVI does not fail to start without it.
+
+## Raspberry Pi
+
+### OS version
+
+Pi 4/5 must run a Trixie-based image for OpenGL ES 3.x. Earlier Debian releases do not ship the required V3D or VC6 driver stack.
+
+### UART for GPS on Raspberry Pi 5
+
+On a Raspberry Pi 5, `/dev/ttyAMA0` on GPIO 14/15 (pins 8 and 10) does not exist until you enable it:
+
+```bash
+sudo raspi-config
+# Interface Options → Serial Port → No login shell → Enable serial port hardware
+```
+
+Or add `dtoverlay=uart0` to `/boot/firmware/config.txt` and reboot.
+
+### MFi coprocessor GPIO wiring
+
+If you wire an Apple MFi authentication coprocessor directly to the board, the installer seeds the app config with the I2C bus and power GPIO. The defaults used by the installer are:
+
+- `carPlayMfiI2cBus`: `2`
+- `carPlayMfiPowerGpio`: `21`
+
+> [!IMPORTANT]
+> The README lists GPIO `21` as the default power pin, but the application default in `src/main/shared/types/DefaultConfig.ts` is `-1` (disabled). The installer writes `21` into `config.json` when you answer yes to the MFi prompt. If you need a different pin, edit `~/.config/LIVI/config.json` after installation.
+
+### RGB and VGA panels below the HDMI clock floor
+
+Small retro or embedded panels often have a pixel clock below HDMI's 25 MHz minimum. The LIVI installer detects Raspberry Pi hardware and offers to set up **HDMI pixel repetition** for these panels.
+
+If you answer yes, the installer runs `scripts/install/pi/setup-hdmi-pr-display.sh`, which:
+
+1. Patches the `vc4` KMS driver to repeat pixels (2x under 25 MHz, 4x under 12.5 MHz).
+2. Forces a panel-specific EDID so the Pi outputs exact native timing.
+3. Pins the video mode in `/boot/firmware/cmdline.txt`.
+4. Installs a kernel post-install hook so the patched module rebuilds for future kernel updates.
+
+Bundled EDID profiles:
+
+| File | Display | Native timing | Wire clock |
+|------|---------|---------------|------------|
+| `MERCEDES_COMAND2_LQ5AW136_320_230p_60Hz.edid` | Mercedes COMAND 2, Sharp LQ5AW136 | 320x230p @ 6.30 MHz | 4x to 25.2 MHz |
+| `MERCEDES_COMAND2_LQ5AW136_640_460i_30Hz.edid` | Mercedes COMAND 2, Sharp LQ5AW136 | 640x460i @ 12.71 MHz | 2x to 25.42 MHz |
+| `VOLVO_RTI_LQ065T5GG63_400_234.edid` | Volvo RTI, Sharp LQ065T5GG63 | 400x234 @ 8.14 MHz | 4x to 32.56 MHz |
+
+To apply a profile manually after installation:
+
+```bash
+bash ~/LIVI/scripts/install/pi/setup-hdmi-pr-display.sh \
+  --edid /path/to/VOLVO_RTI_LQ065T5GG63_400_234.edid
+sudo reboot
+```
+
+After reboot, verify the mode is active:
+
+```bash
+kmsprint | grep -i hdmi
+wlr-randr
+sudo cat /sys/kernel/debug/dri/1/state | grep -i tmds
+```
+
+> [!WARNING]
+> The HDMI-PR script downloads and compiles kernel source. It is slow and requires build tools (`bison`, `flex`, `gcc`, `make`, `libssl-dev`). A failed build leaves the panel dark until you restore the original `vc4` module from its `.livi-bak` copy.
+
+## macOS (arm64)
+
+### Gatekeeper first-launch workflow
+
+LIVI is not signed for the Mac App Store, so the first launch may be blocked by Gatekeeper.
+
+1. Double-click LIVI.app. If a dialog says the app cannot be opened, close it.
+2. Open **System Settings → Privacy & Security**.
+3. Scroll to the **Security** section and click **"Open Anyway"** next to the LIVI block notice.
+4. Confirm the final dialog.
+
+After this one-time approval, the app launches normally and updates do not require repeating the step.
+
+### Native CarPlay on macOS
+
+macOS has no I2C bus exposed for a local MFi coprocessor. To use native Apple CarPlay on a Mac, you must use a LIVI Link over the network. Android Auto over USB works on macOS without additional hardware.
+
+> [!NOTE]
+> LIVI does not support Apple's Basic Accessory Authentication on macOS at this time.
+
+## Bluetooth and Wi-Fi for wireless projection
+
+Wireless CarPlay and wireless Android Auto need dedicated radios:
+
+- **Wi-Fi**: a dedicated interface that LIVI can bring up as an access point. The installer sets the Wi-Fi regulatory domain and disables powersave.
+- **Bluetooth**: an adapter for pairing and handover. Wireless Android Auto additionally needs the HFP profile, which on Linux is provided by PipeWire's Bluetooth plugin (`libspa-0.2-bluetooth` on Debian, `pipewire-libs` on Fedora).
+
+Both can come from a LIVI Link device, which brings its own Wi-Fi and Bluetooth radios and connects over USB.
+
+## Peripheral summary
+
+| Peripheral | Needed for | Notes |
+|------------|------------|-------|
+| MFi coprocessor or LIVI Link | Native Apple CarPlay | Required for authentication. No workaround. |
+| USB-C/Lightning cable | Wired Android Auto, wired CarPlay | Works on any USB port. |
+| Wi-Fi adapter | Wireless CarPlay, wireless Android Auto | Must be dedicated or configurable as hotspot. |
+| Bluetooth adapter | Wireless pairing and handover | HFP required for wireless Android Auto. |
+| GPS serial receiver | GNSS position and time source | NMEA-0183 or u-blox UBX. Optional. |
+| Touch panel | Input | Multitouch or mouse-emulation both supported. |
+
+## What to do next
+
+- See [Configuration](/using-livi/configuration) for `config.json` settings that match your display and MFi wiring.
+- See [Troubleshooting](/troubleshooting) if video does not appear or hardware decode fails.

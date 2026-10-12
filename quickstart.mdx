@@ -1,47 +1,119 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Install LIVI on Linux and macOS"
+sidebarTitle: "Quickstart"
+description: "Download and install LIVI using the unified installer, or run the AppImage and macOS DMG directly. Covers desktop and headless modes, first-run setup, and what the installer changes on your system."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+LIVI ships as an AppImage for Linux (arm64 and x86_64) and a DMG for macOS (arm64). A single installer script auto-detects whether your host runs a desktop session or a headless environment, installs the right dependencies, and sets up autostart and permissions.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Download the installer">
+    Run the unified installer from the repository. It uses `apt` or `dnf` to install system dependencies, then downloads the latest AppImage for your architecture.
 
     ```bash
-    npm install your-package
+    curl -fL -o install.sh https://raw.githubusercontent.com/f-io/LIVI/main/scripts/install/install.sh
+    chmod +x install.sh
+    ./install.sh
+    ```
+
+    The script picks the flow automatically: if the system boot target is `graphical.target`, it runs the desktop flow; otherwise it runs the headless (kiosk) flow. Override this with `--desktop` or `--headless`:
+
+    ```bash
+    ./install.sh --headless
+    ./install.sh --desktop
     ```
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+  <Step title="Choose a release channel">
+    When run interactively, the installer asks whether to install the latest **release** or the latest **nightly** build. In non-interactive mode it defaults to release. Set the channel ahead of time with the `LIVI_CHANNEL` environment variable:
 
     ```bash
-    your-cli init
+    LIVI_CHANNEL=nightly ./install.sh
     ```
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+  <Step title="Answer the interactive prompts">
+    The installer may ask:
+
+    - **Apple MFi coprocessor** — whether an MFi chip is wired to the board for native CarPlay. If you answer yes, the installer seeds `carPlayMfiI2cBus` and `carPlayMfiPowerGpio` into `~/.config/LIVI/config.json` and enables the I2C overlay in `/boot/firmware/config.txt`.
+    - **Boot splash** — whether to replace the Raspberry Pi rainbow boot screen with the LIVI logo.
+    - **RGB/VGA panel below HDMI clock floor** (Raspberry Pi only) — whether to rebuild the `vc4` driver for pixel repetition. This is only needed for small panels whose native timing is below 25 MHz.
+  </Step>
+  <Step title="Reboot (headless installs)">
+    Headless mode configures `tty1` autologin, disables the graphical target, and enables a systemd kiosk service that launches LIVI via the Cage compositor. A reboot is required to start the kiosk session:
 
     ```bash
-    your-cli start
+    sudo reboot
     ```
+
+    After reboot, LIVI starts automatically on `tty1`. Switch to another VT with `Ctrl+Alt+F2` for debugging.
+  </Step>
+  <Step title="Launch from the desktop (desktop installs)">
+    The desktop installer creates an autostart entry and a desktop shortcut. LIVI starts automatically on the next login, or you can launch it manually:
+
+    ```bash
+    ~/LIVI/LIVI.AppImage
+    ```
+
+    Logs are written to `~/.config/LIVI/log/`.
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## System changes the installer makes
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+Both installers modify system configuration to give LIVI the permissions and runtime it needs. These changes are idempotent: re-running the installer updates them safely.
+
+| Change | Path / effect |
+| --- | --- |
+| **udev rules** | `/etc/udev/rules.d/99-LIVI.rules` — disables auto-mounting for iPhone and Android USB devices, suppresses touch-panel mouse events, and disables IPv6 duplicate-address detection for Apple NCM interfaces. |
+| **sudoers helper** | `/etc/sudoers.d/99-LIVI-helper` — lets your user run `livi-helperd` as root without a password prompt. The helper manages Bluetooth, Wi-Fi, the access point, and USB device claiming. |
+| **touch filter** | `/usr/local/lib/livi/livi-touch-filter` — script called by udev to distinguish real mice from touch panels that expose both multitouch and mouse interfaces. |
+| **Wi-Fi powersave** | `/etc/NetworkManager/conf.d/99-LIVI-wifi-powersave.conf` — disables radio power saving so the access point stays up. |
+| **Wi-Fi PMF** | `/etc/NetworkManager/conf.d/99-LIVI-wifi-pmf.conf` — sets 802.11w to optional, needed for some phone handshakes. |
+| **RT priority** | `/etc/security/limits.d/99-livi-rtprio.conf` — grants your user real-time scheduling priority for the CarPlay audio thread. |
+| **Time helper** | `/usr/local/lib/livi/livi-set-time.sh` — lets LIVI set the system clock from GPS. |
+| **Power helper** (headless) | `/usr/local/lib/livi/livi-power.sh` — lets LIVI reboot or power off the host. |
+| **Video-mode helper** (headless) | `/usr/local/lib/livi/livi-video-mode.sh` — lets LIVI pin a video mode in the kernel command line. |
+| **Boot target** (headless) | Switches systemd default target to `multi-user.target`, disabling the graphical login. Undo with `sudo systemctl set-default graphical.target`. |
+| **Kernel modules preload** (headless) | `/etc/modules-load.d/livi.conf` — preloads `cdc_ncm`, `cdc_ether`, and `ipheth` so iPhone USB networking binds at cold boot. |
+| **MFi I2C overlay** (Pi, if yes) | Adds `dtoverlay=i2c-gpio,bus=2,i2c_gpio_sda=19,i2c_gpio_scl=26,i2c_gpio_delay_us=5` to `/boot/firmware/config.txt` and loads `i2c-dev`. |
+
+> [!WARNING] The headless installer changes the boot target, disables `NetworkManager-wait-online`, and sets up `tty1` autologin. If you later want your graphical login back, run `sudo systemctl set-default graphical.target` and remove `/etc/systemd/system/getty@tty1.service.d/livi-autologin.conf`.
+
+## Install from a local AppImage or URL
+
+If you already have an AppImage file or a direct download URL, pass it as the first argument:
+
+```bash
+./install.sh /path/to/LIVI-1.2.3-linux-arm64.AppImage
+./install.sh https://example.com/LIVI-custom.AppImage
+```
+
+The script still installs dependencies, templates, and system rules; only the AppImage fetch step is skipped.
+
+## First launch and quick verification
+
+1. Start LIVI from the desktop shortcut, autostart, or manually.
+2. Open **Settings** from the home screen.
+3. Under **General → Connections**, pick your Wi-Fi interface and Bluetooth adapter if you plan to use wireless CarPlay or Android Auto.
+4. Connect a phone via USB to verify wired Android Auto, or pair over Bluetooth for wireless.
+
+If the screen stays black or video does not appear, force software decoding temporarily to isolate a hardware-decoder issue:
+
+```bash
+LIVI_GST_SWDEC=1 ~/LIVI/LIVI.AppImage
+```
+
+## macOS installation (arm64)
+
+1. Download the `-arm64.dmg` from the [releases page](https://github.com/f-io/LIVI/releases).
+2. Open the DMG and drag **LIVI.app** into **Applications**.
+3. Launch the app once. macOS may block it with a Gatekeeper warning.
+4. Open **System Settings → Privacy & Security**, scroll down, and click **"Open Anyway"**.
+5. Confirm the dialog. After this one-time step, the app launches normally and future updates work without repeating it.
+
+> [!NOTE] macOS builds need only Node.js, pnpm, and Rust to compile from source. No `apt` or `dnf` packages are required.
+
+## What to do next
+
+- Read [Hardware Notes](/using-livi/hardware) for platform-specific requirements on Raspberry Pi, Linux x86_64, and macOS.
+- Read [Configuration](/using-livi/configuration) to customize `config.json`, display calibration, and session defaults.
+- Read [Troubleshooting](/troubleshooting) if you run into problems after install.

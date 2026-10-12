@@ -1,0 +1,75 @@
+---
+title: "LIVI source layout: Electron frontend and Rust native core"
+sidebarTitle: "Project Structure"
+description: "Understand the top-level directories, Electron frontend code, Rust native workspace, and helper scripts that make up the LIVI 9.3.0 source tree."
+---
+
+LIVI is a hybrid TypeScript/Electron and Rust project. The repository splits UI code, native services, and build tooling into clearly separated trees. This reference maps the directories you will touch when building, theming, or extending LIVI.
+
+## Top-level layout
+
+| Path | Purpose |
+| --- | --- |
+| `src/` | Electron main, preload bridge, and React renderer |
+| `native/` | Rust workspace: core, helper daemon, media pipeline, compositor, and link firmware |
+| `scripts/` | Build orchestration, telemetry CLI, and installation helpers |
+| `assets/` | Icons, display calibration files, and platform-specific resources |
+| `docs/` | Public marketing media and site assets (not manual documentation articles) |
+| `package.json` | Root Node/Electron manifest, scripts, and pnpm workspace metadata |
+
+<Warning>
+  The `docs/` folder contains marketing banners and screenshots for the public website. It does not hold the manual you are reading now.
+</Warning>
+
+## `src/` — Electron and React
+
+| Path | Responsibility |
+| --- | --- |
+| `src/main/` | Main process: window management, IPC handlers, and the native-core link |
+| `src/preload/` | `contextBridge` API exposed to the renderer process |
+| `src/renderer/` | React application: routes, components, stores, and themes |
+| `src/public/` | Static HTML entry point and public assets |
+| `src/types/` | Shared TypeScript type declarations |
+
+Key files to know:
+
+- `src/main/index.ts` — main entry point
+- `src/main/core.ts` — subscription to native core configuration
+- `src/preload/index.ts` — bridge definitions
+- `src/renderer/src/store/store.ts` — Zustand-backed state synced from the core
+
+## `native/` — Rust workspace
+
+`native/Cargo.toml` defines a workspace with more than fifty crates and binaries. They group into these areas:
+
+- **Core and helper binaries** (`livi-helperd/bin/livi-core`, `livi-helperd/bin/livi-helperd`) — session management, state hub, and platform connectivity
+- **CarPlay** (`crates/livi-cp`, `crates/iap2-*`) — iAP2 protocol, authentication, and wired or wireless transport
+- **Android Auto** (`crates/livi-aa-stack`, `crates/livi-aa`, `crates/livi-aa-proto`) — session control and media routing
+- **Media and GStreamer** (`livi-gst-video/rust/*`, `crates/livi-media`) — video decoding, audio playback, microphone uplink, and screen compositing
+- **Linux compositor** (`livi-compositor/rust`) — Wayland compositor that blends UI surfaces with video planes
+- **Link firmware** (`livi-link/`) — host tools and device-side daemons for the optional LIVI Link radio
+
+## `scripts/` — Automation
+
+| Path | Purpose |
+| --- | --- |
+| `scripts/build-native.mjs` | Compiles Rust binaries, handles cross-compilation, and copies artifacts into `native/*/build/Release` |
+| `scripts/tools/` | Developer utilities, including the telemetry simulator CLI |
+| `scripts/install/` | System installation script for Debian/Ubuntu/Fedora and Raspberry Pi OS |
+| `scripts/gstreamer/` | GStreamer packaging helpers |
+
+## Related pages
+
+<CardGroup cols="2">
+  <Card title="Architecture" icon="diagram" href="/architecture">
+    How the components communicate
+  </Card>
+
+  <Card title="Build and Test" icon="hammer" href="/build-test">
+    Exact commands to compile and verify the project
+  </Card>
+
+  <Card title="Telemetry" icon="gauge" href="/telemetry">
+    Using the developer CLI in `scripts/tools/`
+  </Card>
+</CardGroup>

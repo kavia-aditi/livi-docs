@@ -1,0 +1,47 @@
+---
+title: "Contribute to LIVI and Understand Its Open-Source License"
+sidebarTitle: "Contributing"
+description: "Prepare source changes for LIVI, find its development checks, and understand the project license, third-party components, and community credits."
+---
+
+LIVI combines TypeScript, Rust, and GStreamer. Use the [Project Structure](/project-structure) to find the relevant code and [Build, Test, and Lint](/build-test) to prepare a change against the inspected **9.3.0** package.
+
+## Prepare a Change
+
+<Steps>
+  <Step title="Identify the Current Owner">
+    Start with [Architecture](/architecture). Phone sessions live in the native core; Electron manages the application interface and its integration with that core.
+  </Step>
+  <Step title="Run Relevant Checks">
+    The package provides `pnpm run typecheck`, `pnpm run test`, and `pnpm run lint:check`. `pnpm run lint` and `pnpm run format` write changes to files. Review those changes before sharing them.
+  </Step>
+  <Step title="Describe What You Verified">
+    Include reproduction steps, affected platform, and checks you actually ran. Distinguish unit-test results from hardware testing. Installer changes can alter host services and boot configuration.
+  </Step>
+</Steps>
+
+<Note>
+  A formal submission policy or contributor agreement was not verified. Do not treat this page as a maintainer-approved pull-request policy. No builds, tests, or hardware checks were run while drafting these guides.
+</Note>
+
+## License
+
+The package and README declare **GPL-3.0-or-later**. Consult the repository license text before distributing LIVI or modified builds; the project is supplied without warranty. Third-party components retain their own license requirements.
+
+## Credits
+
+`CREDITS.md` thanks contributors, testers, issue reporters, and community research. It names these inspiration and prior-art projects:
+
+- **BertoldVdb/WACResearch**, Bertold Van den Bergh.
+- **f1xpl/aasdk**, Michal Szwaj.
+- Other community reverse-engineering projects and write-ups; the source describes its list as incomplete.
+
+| Component | License Listed in Credits |
+| --- | --- |
+| Electron | MIT; Chromium and bundled components have additional licenses |
+| Smithay | MIT |
+| GStreamer | LGPL-2.1-or-later |
+| nusb | MIT OR Apache-2.0 |
+| Roboto | SIL Open Font License 1.1 |
+
+GStreamer license texts are included under `assets/gstreamer/LICENSES`. Consult `CREDITS.md` and bundled notices for attribution details, rather than treating this table as a complete dependency-license inventory.
